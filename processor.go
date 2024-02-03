@@ -19,8 +19,12 @@ func (ctx *processor) dispatch(message Message, context *gin.Context) error {
 	return fmt.Errorf("handler %s not found", message.Type)
 }
 
-func (ctx *processor) registerHandlers(handlers map[string]func(msg Message, ctx *gin.Context)) {
-	ctx.handlers = handlers
+func (ctx *processor) registerHandlers(handlers []ActionHandler) {
+	for _, handler := range handlers {
+		ctx.handlers[handler.GetActionType()] = handler.Handler
+	}
 }
 
-var actionProcessor = &processor{}
+var actionProcessor = &processor{
+	handlers: make(map[string]func(msg Message, ctx *gin.Context)),
+}

@@ -10,11 +10,15 @@ import (
 )
 
 type (
+	ActionHandler interface {
+		GetActionType() string
+		Handler(msg Message, ctx *gin.Context)
+	}
 	Config struct {
 		EventUrl          string
 		ActionUrl         string
 		ClientIDHeaderKey string
-		Handlers          map[string]func(msg Message, ctx *gin.Context)
+		Handlers          []ActionHandler
 	}
 	Response struct {
 		Code  int    `json:"code"`
