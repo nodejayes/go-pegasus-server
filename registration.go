@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	di "github.com/nodejayes/generic-di"
 )
 
@@ -24,8 +25,9 @@ type (
 func Register(router *gin.Engine, config *Config) {
 	router.GET(config.EventUrl, func(ctx *gin.Context) {
 		clientStore := di.Inject[ClientStore]()
-		clientID := ctx.Param(config.ClientIDHeaderKey)
-		if len(clientID) < 1 {
+		clientID, ok := ctx.GetQuery(config.ClientIDHeaderKey)
+		_, err := uuid.Parse(clientID)
+		if !ok || err != nil {
 			ctx.JSON(http.StatusBadRequest, Response{
 				Code:  http.StatusBadRequest,
 				Error: "clientId not found in header",
