@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "outDir": "bin",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "CommonJS",
+    "strict": true,
+    "declaration": true
+  },
+  "include": ["src"]
+}

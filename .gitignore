@@ -19,3 +19,6 @@
 
 # Go workspace file
 go.work
+
+ts-client/bin
+ts-client/node_modules
