@@ -10,9 +10,10 @@ import (
 
 type (
 	Config struct {
-		EventUrl  string
-		ActionUrl string
-		Handlers  map[string]func(msg Message, ctx *gin.Context)
+		EventUrl          string
+		ActionUrl         string
+		ClientIDHeaderKey string
+		Handlers          map[string]func(msg Message, ctx *gin.Context)
 	}
 	Response struct {
 		Code  int    `json:"code"`
@@ -22,6 +23,19 @@ type (
 
 func Register(router *gin.Engine, config *Config) {
 	router.GET(config.EventUrl, func(ctx *gin.Context) {
+		clientStore := di.Inject[ClientStore]()
+		clientID := ctx.GetHeader(config.ClientIDHeaderKey)
+		if len(clientID) < 1 {
+			ctx.JSON(http.StatusBadRequest, Response{
+				Code:  http.StatusBadRequest,
+				Error: "clientId not found in header",
+			})
+			return
+		}
+		clientStore.Add(Client{
+			ID:      clientID,
+			Context: ctx,
+		})
 		ctx.Stream(func(w io.Writer) bool {
 			if msg, ok := <-di.Inject[EventHander]().getChannel(); ok {
 				ctx.SSEvent("message", msg)
@@ -34,14 +48,14 @@ func Register(router *gin.Engine, config *Config) {
 		var msg Message
 		err := ctx.BindJSON(&msg)
 		if err != nil {
-			ctx.JSON(http.StatusOK, Response{
+			ctx.JSON(http.StatusInternalServerError, Response{
 				Code:  http.StatusInternalServerError,
 				Error: err.Error(),
 			})
 		}
 		err = actionProcessor.dispatch(msg, ctx)
 		if err != nil {
-			ctx.JSON(http.StatusOK, Response{
+			ctx.JSON(http.StatusInternalServerError, Response{
 				Code:  http.StatusInternalServerError,
 				Error: err.Error(),
 			})

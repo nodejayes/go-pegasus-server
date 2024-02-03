@@ -15,26 +15,33 @@ type (
 		Type    string `json:"type"`
 		Payload any    `json:"payload"`
 	}
+	ChannelMessage struct {
+		ClientFilter func(client Client) bool
+		Message      string
+	}
 	EventHander struct {
-		channel chan string
+		channel chan ChannelMessage
 	}
 )
 
 func newEventHandler() *EventHander {
 	return &EventHander{
-		channel: make(chan string),
+		channel: make(chan ChannelMessage),
 	}
 }
 
-func (ctx *EventHander) getChannel() chan string {
+func (ctx *EventHander) getChannel() chan ChannelMessage {
 	return ctx.channel
 }
 
-func (ctx *EventHander) SendMessage(message Message) error {
+func (ctx *EventHander) SendMessage(clientFilter func(client Client) bool, message Message) error {
 	buffer, err := json.Marshal(message)
 	if err != nil {
 		return err
 	}
-	ctx.channel <- string(buffer)
+	ctx.channel <- ChannelMessage{
+		ClientFilter: clientFilter,
+		Message:      string(buffer),
+	}
 	return nil
 }
