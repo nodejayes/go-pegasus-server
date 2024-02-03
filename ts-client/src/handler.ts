@@ -1,4 +1,5 @@
 import { MessageEventEmitter } from "./event.emitter";
+import { v4 } from 'uuid';
 
 export interface Message {
   type: string;
@@ -34,7 +35,8 @@ class EventHandler {
       this._sourceCanReconnect = true;
       this._source = null;
     }
-    this._source = new EventSource(config.eventUrl);
+    const eventUrl = `${config.eventUrl.endsWith('/') ? config.eventUrl.substring(0, config.eventUrl.length - 1) : config.eventUrl}?clientId=${this.getClientId(this._config?.clientIdHeaderKey ?? '')}`;
+    this._source = new EventSource(eventUrl);
     this._source.onmessage = (event: MessageEvent<any>) =>
       this.newMessage(event);
     this._source.onerror = (event: Event) => this.sourceError(event);
@@ -48,11 +50,15 @@ class EventHandler {
   }
 
   async sendAction(message: Message): Promise<ActionResponse> {
+    if (!this._config) {
+      throw new Error('no config found');
+    }
     return await fetch(this._config.actionUrl, {
       mode: "cors",
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        [this._config.clientIdHeaderKey]: this.getClientId(this._config.clientIdHeaderKey),
       },
       body: JSON.stringify(message),
     }).then((resp) => resp.json());
@@ -69,12 +75,21 @@ class EventHandler {
       this._sourceCanReconnect &&
       this._config
     ) {
-      setTimeout(() => this.open(this._config), this._config.reconnectTimeout);
+      setTimeout(() => this._config ? this.open(this._config) : this.sourceError(event), this._config.reconnectTimeout);
     }
   }
 
   private sourceOpen(event: Event) {
     this._readyConnection.emit("ready");
+  }
+
+  private getClientId(key: string): string {
+    let clientId = localStorage.getItem(key);
+    if (!clientId) {
+      clientId = v4();
+      localStorage.setItem(key, clientId);
+    }
+    return clientId;
   }
 }
 

@@ -24,7 +24,7 @@ type (
 func Register(router *gin.Engine, config *Config) {
 	router.GET(config.EventUrl, func(ctx *gin.Context) {
 		clientStore := di.Inject[ClientStore]()
-		clientID := ctx.GetHeader(config.ClientIDHeaderKey)
+		clientID := ctx.Param(config.ClientIDHeaderKey)
 		if len(clientID) < 1 {
 			ctx.JSON(http.StatusBadRequest, Response{
 				Code:  http.StatusBadRequest,

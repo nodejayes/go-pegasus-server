@@ -1,14 +1,14 @@
 class MessageEventEmitter<T> {
   private _events: { [key: string]: ((payload: T) => void)[] } = {};
 
-  on(event: string, handler: (payload: T) => void) {
+  on(event: string, handler: (payload: any) => void) {
     if (!this._events[event]) {
       this._events[event] = [handler];
       return;
     }
     this._events[event].push(handler);
   }
-  remove(event: string, handlerToRemove: (payload: T) => void) {
+  remove(event: string, handlerToRemove: (payload: any) => void) {
     if (!this._events[event]) {
       return;
     }
@@ -22,7 +22,7 @@ class MessageEventEmitter<T> {
       if (typeof ev !== 'function') {
         continue;
       }
-      ev(payload ?? null);
+      ev(payload ?? null as T);
     }
   }
 }
