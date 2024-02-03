@@ -38,7 +38,11 @@ func Register(router *gin.Engine, config *Config) {
 		})
 		ctx.Stream(func(w io.Writer) bool {
 			if msg, ok := <-di.Inject[EventHander]().getChannel(); ok {
-				ctx.SSEvent("message", msg)
+				client := clientStore.Get(msg.ClientFilter)
+				if len(client) < 1 {
+					return true
+				}
+				ctx.SSEvent("message", msg.Message)
 				return true
 			}
 			return false
