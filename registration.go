@@ -47,16 +47,16 @@ func Register(router *gin.Engine, config *Config) {
 			ID:      clientID,
 			Context: ctx,
 		})
+		go func() {
+			time.Sleep(time.Duration(config.SendConnectedAfterMs) * time.Millisecond)
+			di.Inject[EventHander]().SendMessage(func(client Client) bool {
+				return client.ID == clientID
+			}, Message{
+				Type:    "connected",
+				Payload: clientID,
+			})
+		}()
 		ctx.Stream(func(w io.Writer) bool {
-			go func() {
-				time.Sleep(time.Duration(config.SendConnectedAfterMs) * time.Millisecond)
-				di.Inject[EventHander]().SendMessage(func(client Client) bool {
-					return client.ID == clientID
-				}, Message{
-					Type:    "connected",
-					Payload: clientID,
-				})
-			}()
 			if msg, ok := <-di.Inject[EventHander]().getChannel(); ok {
 				client := clientStore.Get(msg.ClientFilter)
 				if len(client) < 1 {
