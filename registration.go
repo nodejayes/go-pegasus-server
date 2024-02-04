@@ -3,6 +3,7 @@ package pegasus
 import (
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,10 +16,11 @@ type (
 		Handler(msg Message, ctx *gin.Context)
 	}
 	Config struct {
-		EventUrl          string
-		ActionUrl         string
-		ClientIDHeaderKey string
-		Handlers          []ActionHandler
+		EventUrl             string
+		ActionUrl            string
+		ClientIDHeaderKey    string
+		SendConnectedAfterMs int
+		Handlers             []ActionHandler
 	}
 	Response struct {
 		Code  int    `json:"code"`
@@ -27,6 +29,9 @@ type (
 )
 
 func Register(router *gin.Engine, config *Config) {
+	if config.SendConnectedAfterMs < 1 {
+		config.SendConnectedAfterMs = 500
+	}
 	router.GET(config.EventUrl, func(ctx *gin.Context) {
 		clientStore := di.Inject[ClientStore]()
 		clientID, ok := ctx.GetQuery(config.ClientIDHeaderKey)
@@ -43,6 +48,15 @@ func Register(router *gin.Engine, config *Config) {
 			Context: ctx,
 		})
 		ctx.Stream(func(w io.Writer) bool {
+			go func() {
+				time.Sleep(time.Duration(config.SendConnectedAfterMs) * time.Millisecond)
+				di.Inject[EventHander]().SendMessage(func(client Client) bool {
+					return client.ID == clientID
+				}, Message{
+					Type:    "connected",
+					Payload: clientID,
+				})
+			}()
 			if msg, ok := <-di.Inject[EventHander]().getChannel(); ok {
 				client := clientStore.Get(msg.ClientFilter)
 				if len(client) < 1 {
