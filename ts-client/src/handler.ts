@@ -1,4 +1,4 @@
-import { MessageEventEmitter } from "./event.emitter";
+import { MessageEventEmitter, Subscription } from "./event.emitter";
 import { v4 } from "uuid";
 
 export interface Message {
@@ -51,9 +51,8 @@ class EventHandler {
     this._source.onopen = (event) => this.sourceOpen(event);
   }
 
-  listenEvent<T>(event: string, handler: (payload: T) => void) {
-    this._sourceMessage.remove(event, handler);
-    this._sourceMessage.on(event, handler);
+  subscribe<T>(event: string, handler: (payload: T) => void): Subscription {
+    return this._sourceMessage.subscribe(event, handler);
   }
 
   async sendAction(message: Message): Promise<ActionResponse> {
