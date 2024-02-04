@@ -1,5 +1,5 @@
 import { MessageEventEmitter } from "./event.emitter";
-import { v4 } from 'uuid';
+import { v4 } from "uuid";
 
 export interface Message {
   type: string;
@@ -27,21 +27,28 @@ class EventHandler {
 
   open(config: EventHandlerConfig) {
     if (!config.reconnectTimeout) {
+      config.eventUrl = "/events";
+      config.actionUrl = "/action";
+      config.clientIdHeaderKey = "clientId";
       config.reconnectTimeout = 5000;
     }
+    this._config = config;
     if (this._source) {
       this._sourceCanReconnect = false;
       this._source.close();
       this._sourceCanReconnect = true;
       this._source = null;
     }
-    const eventUrl = `${config.eventUrl.endsWith('/') ? config.eventUrl.substring(0, config.eventUrl.length - 1) : config.eventUrl}?clientId=${this.getClientId(this._config?.clientIdHeaderKey ?? '')}`;
+    const eventUrl = `${
+      config.eventUrl.endsWith("/")
+        ? config.eventUrl.substring(0, config.eventUrl.length - 1)
+        : config.eventUrl
+    }?clientId=${this.getClientId(config?.clientIdHeaderKey ?? "")}`;
     this._source = new EventSource(eventUrl);
     this._source.onmessage = (event: MessageEvent<any>) =>
       this.newMessage(event);
     this._source.onerror = (event: Event) => this.sourceError(event);
     this._source.onopen = (event) => this.sourceOpen(event);
-    this._config = config;
   }
 
   listenEvent<T>(event: string, handler: (payload: T) => void) {
@@ -51,14 +58,16 @@ class EventHandler {
 
   async sendAction(message: Message): Promise<ActionResponse> {
     if (!this._config) {
-      throw new Error('no config found');
+      throw new Error("no config found");
     }
     return await fetch(this._config.actionUrl, {
       mode: "cors",
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        [this._config.clientIdHeaderKey]: this.getClientId(this._config.clientIdHeaderKey),
+        [this._config.clientIdHeaderKey]: this.getClientId(
+          this._config.clientIdHeaderKey
+        ),
       },
       body: JSON.stringify(message),
     }).then((resp) => resp.json());
@@ -75,7 +84,11 @@ class EventHandler {
       this._sourceCanReconnect &&
       this._config
     ) {
-      setTimeout(() => this._config ? this.open(this._config) : this.sourceError(event), this._config.reconnectTimeout);
+      setTimeout(
+        () =>
+          this._config ? this.open(this._config) : this.sourceError(event),
+        this._config.reconnectTimeout
+      );
     }
   }
 
