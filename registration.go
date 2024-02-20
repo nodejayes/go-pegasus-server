@@ -110,6 +110,8 @@ func handleOutgoing(router *http.ServeMux, config *Config) {
 		}()
 
 		res.Header().Set("Content-Type", "text/event-stream")
+		res.Header().Set("Cache-Control", "no-cache")
+		res.Header().Set("Connection", "keep-alive")
 		for msg := range di.Inject[EventHander]().getChannel() {
 			client := clientStore.Get(msg.ClientFilter)
 			if len(client) < 1 {
@@ -123,7 +125,7 @@ func handleOutgoing(router *http.ServeMux, config *Config) {
 			fmt.Fprint(res, data)
 			err = rc.Flush()
 			if err != nil {
-				println(fmt.Sprintf("Error on Flush ResponseWriter: %s", err.Error()))
+				return
 			}
 		}
 	})
