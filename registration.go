@@ -82,11 +82,7 @@ func handleIncoming(router *http.ServeMux, config *Config) {
 
 func handleOutgoing(router *http.ServeMux, config *Config) {
 	router.HandleFunc(fmt.Sprintf("GET %s", config.EventUrl), func(res http.ResponseWriter, req *http.Request) {
-		flusher, ok := res.(http.Flusher)
-		if !ok {
-			http.Error(res, "SSE not supported", http.StatusInternalServerError)
-			return
-		}
+		rc := http.NewResponseController(res)
 
 		clientStore := di.Inject[ClientStore]()
 		clientID := req.URL.Query().Get(config.ClientIDHeaderKey)
@@ -125,7 +121,10 @@ func handleOutgoing(router *http.ServeMux, config *Config) {
 				break
 			}
 			fmt.Fprint(res, data)
-			flusher.Flush()
+			err = rc.Flush()
+			if err != nil {
+				println(fmt.Sprintf("Error on Flush ResponseWriter: %s", err.Error()))
+			}
 		}
 	})
 }
