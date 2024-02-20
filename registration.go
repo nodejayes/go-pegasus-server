@@ -1,11 +1,12 @@
 package pegasus
 
 import (
-	"io"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	di "github.com/nodejayes/generic-di"
 )
@@ -13,7 +14,7 @@ import (
 type (
 	ActionHandler interface {
 		GetActionType() string
-		Handler(msg Message, ctx *gin.Context)
+		Handler(msg Message, res http.ResponseWriter, req *http.Request)
 	}
 	Config struct {
 		EventUrl             string
@@ -28,24 +29,79 @@ type (
 	}
 )
 
-func Register(router *gin.Engine, config *Config) {
+func jsonResponse(res http.ResponseWriter, statusCode int, data any) {
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(statusCode)
+	str, _ := json.Marshal(data)
+	res.Write(str)
+}
+
+func formatMessage(event, data string) (string, error) {
+	sb := strings.Builder{}
+
+	sb.WriteString(fmt.Sprintf("event: %s\n", event))
+	sb.WriteString(fmt.Sprintf("data: %v\n\n", data))
+
+	return sb.String(), nil
+}
+
+func Register(router *http.ServeMux, config *Config) {
 	if config.SendConnectedAfterMs < 1 {
 		config.SendConnectedAfterMs = 500
 	}
-	router.GET(config.EventUrl, func(ctx *gin.Context) {
+	handleOutgoing(router, config)
+	handleIncoming(router, config)
+	actionProcessor.registerHandlers(config.Handlers)
+}
+
+func handleIncoming(router *http.ServeMux, config *Config) {
+	router.HandleFunc(fmt.Sprintf("POST %s", config.ActionUrl), func(res http.ResponseWriter, req *http.Request) {
+		var msg Message
+		err := json.NewDecoder(req.Body).Decode(&msg)
+		if err != nil {
+			jsonResponse(res, http.StatusInternalServerError, Response{
+				Code:  http.StatusInternalServerError,
+				Error: err.Error(),
+			})
+			return
+		}
+		err = actionProcessor.dispatch(msg, res, req)
+		if err != nil {
+			jsonResponse(res, http.StatusInternalServerError, Response{
+				Code:  http.StatusInternalServerError,
+				Error: err.Error(),
+			})
+			return
+		}
+		jsonResponse(res, http.StatusOK, Response{
+			Code:  http.StatusOK,
+			Error: "",
+		})
+	})
+}
+
+func handleOutgoing(router *http.ServeMux, config *Config) {
+	router.HandleFunc(fmt.Sprintf("GET %s", config.EventUrl), func(res http.ResponseWriter, req *http.Request) {
+		flusher, ok := res.(http.Flusher)
+		if !ok {
+			http.Error(res, "SSE not supported", http.StatusInternalServerError)
+			return
+		}
+
 		clientStore := di.Inject[ClientStore]()
-		clientID, ok := ctx.GetQuery(config.ClientIDHeaderKey)
+		clientID := req.URL.Query().Get(config.ClientIDHeaderKey)
 		_, err := uuid.Parse(clientID)
-		if !ok || err != nil {
-			ctx.JSON(http.StatusBadRequest, Response{
+		if err != nil {
+			jsonResponse(res, http.StatusBadRequest, Response{
 				Code:  http.StatusBadRequest,
 				Error: "clientId not found in header",
 			})
 			return
 		}
 		clientStore.Add(Client{
-			ID:      clientID,
-			Context: ctx,
+			ID:       clientID,
+			Response: res,
+			Request:  req,
 		})
 		go func() {
 			time.Sleep(time.Duration(config.SendConnectedAfterMs) * time.Millisecond)
@@ -56,38 +112,20 @@ func Register(router *gin.Engine, config *Config) {
 				Payload: clientID,
 			})
 		}()
-		ctx.Stream(func(w io.Writer) bool {
-			if msg, ok := <-di.Inject[EventHander]().getChannel(); ok {
-				client := clientStore.Get(msg.ClientFilter)
-				if len(client) < 1 {
-					return true
-				}
-				ctx.SSEvent("message", msg.Message)
-				return true
+
+		res.Header().Set("Content-Type", "text/event-stream")
+		for msg := range di.Inject[EventHander]().getChannel() {
+			client := clientStore.Get(msg.ClientFilter)
+			if len(client) < 1 {
+				break
 			}
-			return false
-		})
-	})
-	router.POST(config.ActionUrl, func(ctx *gin.Context) {
-		var msg Message
-		err := ctx.BindJSON(&msg)
-		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, Response{
-				Code:  http.StatusInternalServerError,
-				Error: err.Error(),
-			})
+			data, err := formatMessage("message", msg.Message)
+			if err != nil {
+				fmt.Println(err.Error())
+				break
+			}
+			fmt.Fprint(res, data)
+			flusher.Flush()
 		}
-		err = actionProcessor.dispatch(msg, ctx)
-		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, Response{
-				Code:  http.StatusInternalServerError,
-				Error: err.Error(),
-			})
-		}
-		ctx.JSON(http.StatusOK, Response{
-			Code:  http.StatusOK,
-			Error: "",
-		})
 	})
-	actionProcessor.registerHandlers(config.Handlers)
 }

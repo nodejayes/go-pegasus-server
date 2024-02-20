@@ -1,7 +1,8 @@
 package pegasus
 
 import (
-	"github.com/gin-gonic/gin"
+	"net/http"
+
 	di "github.com/nodejayes/generic-di"
 )
 
@@ -12,7 +13,8 @@ func init() {
 type (
 	Client struct {
 		ID string
-		Context *gin.Context
+		Response http.ResponseWriter
+		Request *http.Request
 	}
 	ClientStore struct {
 		Clients map[string]Client

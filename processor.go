@@ -2,18 +2,17 @@ package pegasus
 
 import (
 	"fmt"
-
-	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 type processor struct {
-	handlers map[string]func(msg Message, ctx *gin.Context)
+	handlers map[string]func(msg Message, res http.ResponseWriter, req *http.Request)
 }
 
-func (ctx *processor) dispatch(message Message, context *gin.Context) error {
+func (ctx *processor) dispatch(message Message, res http.ResponseWriter, req *http.Request) error {
 	handler := ctx.handlers[message.Type]
 	if handler != nil {
-		handler(message, context)
+		handler(message, res, req)
 		return nil
 	}
 	return fmt.Errorf("handler %s not found", message.Type)
@@ -26,5 +25,5 @@ func (ctx *processor) registerHandlers(handlers []ActionHandler) {
 }
 
 var actionProcessor = &processor{
-	handlers: make(map[string]func(msg Message, ctx *gin.Context)),
+	handlers: make(map[string]func(msg Message, res http.ResponseWriter, req *http.Request)),
 }
